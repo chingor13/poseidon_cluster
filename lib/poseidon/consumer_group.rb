@@ -33,13 +33,37 @@ class Poseidon::ConsumerGroup
     # @attr_reader [Integer] partition consumer partition
     attr_reader :partition
 
+    attr_reader :offset_manager
+    attr_reader :group
+
     # @api private
     def initialize(group, partition, options = {})
+      @group = group
       broker = group.leader(partition)
-      offset = group.offset(partition)
-      offset = (options[:trail] ? :latest_offset : :earliest_offset) if offset == 0
-      options.delete(:trail)
-      super group.id, broker.host, broker.port, group.topic, partition, offset, options
+      trail = options.delete(:trail)
+      super(group.id, broker.host, broker.port, group.topic, partition, 0, options)
+
+      offset = load_offset
+      offset = (trail ? :latest_offset : :earliest_offset) if offset == 0
+      @offset = offset
+    end
+
+    def offset_manager
+      @offset_manager ||= begin
+        Poseidon::OffsetManager::KafkaManager.new({
+          connection: @connection,
+          group_name: group.name,
+          topic: group.topic
+        })
+      end
+    end
+
+    def commit_offset
+      offset_manager.set(partition, offset)
+    end
+
+    def load_offset
+      offset_manager.get(partition)
     end
 
   end
@@ -101,9 +125,10 @@ class Poseidon::ConsumerGroup
     # Poseidon::BrokerPool doesn't provide default value for this option
     # Configuring default value like this isn't beautiful, though.. by kssminus
     options[:socket_timeout_ms] ||= 10000
+    options[:connect_timeout_ms] ||= 10000
     @options    = options
     @consumers  = []
-    @pool       = ::Poseidon::BrokerPool.new(id, brokers, options[:socket_timeout_ms])
+    @pool       = ::Poseidon::BrokerPool.new(id, brokers, options[:socket_timeout_ms], options[:connect_timeout_ms])
     @mutex      = Mutex.new
     @registered = false
 
@@ -120,7 +145,6 @@ class Poseidon::ConsumerGroup
     @registries ||= {
       consumer: "/consumers/#{name}/ids",
       owner:    "/consumers/#{name}/owners/#{topic}",
-      offset:   "/consumers/#{name}/offsets/#{topic}",
     }
   end
 
@@ -175,22 +199,6 @@ class Poseidon::ConsumerGroup
     metadata.lead_broker_for_partition(topic, partition)
   end
 
-  # @param [Integer] partition
-  # @return [Integer] the latest stored offset for the given partition
-  def offset(partition)
-    data, _ = zk.get offset_path(partition), ignore: :no_node
-    data.to_i
-  end
-
-  # Commits the latest offset for a partition
-  # @param [Integer] partition
-  # @param [Integer] offset
-  def commit(partition, offset)
-    zk.set offset_path(partition), offset.to_s
-  rescue ZK::Exceptions::NoNode
-    zk.create offset_path(partition), offset.to_s, ignore: :node_exists
-  end
-
   # Sorted partitions by broker address (so partitions on the same broker are clustered together)
   # @return [Array<Poseidon::Protocol::PartitionMetadata>] sorted partitions
   def partitions
@@ -237,7 +245,7 @@ class Poseidon::ConsumerGroup
     end
 
     unless opts[:commit] == false || commit == false
-      commit consumer.partition, consumer.offset
+      consumer.commit_offset
     end
     true
   end
@@ -420,11 +428,6 @@ class Poseidon::ConsumerGroup
     # @return [String] zookeeper ownership claim path
     def claim_path(partition)
       "#{registries[:owner]}/#{partition}"
-    end
-
-    # @return [String] zookeeper offset storage path
-    def offset_path(partition)
-      "#{registries[:offset]}/#{partition}"
     end
 
     # @return [String] zookeeper consumer registration path

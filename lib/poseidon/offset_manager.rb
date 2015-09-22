@@ -1,0 +1,52 @@
+module Poseidon::OffsetManager
+
+  class KafkaManager
+    attr_reader :connection, :group_name, :topic
+    def initialize(options = {})
+      @connection = options.fetch(:connection)
+      @group_name = options.fetch(:group_name)
+      @topic = options.fetch(:topic)
+    end
+
+    def set(partition, offset)
+      connection.set_consumer_offset(group_name, {
+        topic => [[partition, offset, '']]
+      })
+    end
+
+    def get(partition)
+      res = connection.fetch_consumer_offset(group_name, {
+        topic => [partition]
+      })
+      res.topic_responses.first.partitions.first.offset
+    end
+  end
+
+  class ZookeeperManager
+    attr_reader :zk, :group_name, :topic
+    def initialize(options = {})
+      @zk = options.fetch(:zk)
+      @group_name = options.fetch(:group_name)
+      @topic = options.fetch(:topic)
+    end
+
+    def set(partition, offset)
+      zk.set offset_path(partition), offset.to_s
+    rescue ZK::Exceptions::NoNode
+      zk.create offset_path(partition), offset.to_s, ignore: :node_exists
+    end
+
+    def get(partition)
+      data, _ = zk.get offset_path(partition), ignore: :no_node
+      data.to_i
+    end
+
+    protected
+
+    # @return [String] zookeeper offset storage path
+    def offset_path(partition)
+      "/consumers/#{group_name}/offsets/#{topic}/#{partition}"
+    end
+  end
+
+end

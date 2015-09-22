@@ -23,6 +23,6 @@ module Poseidon::Cluster
 
 end
 
-%w|consumer_group|.each do |name|
+%w|consumer_group offset_manager|.each do |name|
   require "poseidon/#{name}"
 end

@@ -3,9 +3,18 @@ module Poseidon::OffsetManager
   class KafkaManager
     attr_reader :connection, :group_name, :topic
     def initialize(options = {})
-      @connection = options.fetch(:connection)
+      conn = options.fetch(:connection)
       @group_name = options.fetch(:group_name)
       @topic = options.fetch(:topic)
+
+      res = conn.get_consumer_metadata(@group_name)
+      @connection = Poseidon::Connection.new(
+        res.coordinator_host,
+        res.coordinator_port,
+        "#{@group_name}_#{@topic}",
+        200,
+        200
+      )
     end
 
     def set(partition, offset)
@@ -18,7 +27,13 @@ module Poseidon::OffsetManager
       res = connection.fetch_consumer_offset(group_name, {
         topic => [partition]
       })
-      res.topic_responses.first.partitions.first.offset
+      partition = res.topic_responses.first.partitions.first
+      if partition.error == 0
+        partition.offset
+      else
+        puts "WARNING: got error: #{Poseidon::Errors::ERROR_CODES[partition.error].name}"
+        0
+      end
     end
   end
 

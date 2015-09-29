@@ -36,25 +36,17 @@ class Poseidon::ConsumerGroup
     # @attr_reader [OffsetManager] offset_manager How we get/set partition offsets
     attr_reader :offset_manager
 
+    attr_reader :group
+
     # @api private
     def initialize(group, partition, options = {})
+      @group = group
       broker = group.leader(partition)
       trail = options.delete(:trail)
       super(group.id, broker.host, broker.port, group.topic, partition, 0, options)
 
-      @offset_manager = if @connection.respond_to?(:fetch_consumer_offset)
-        Poseidon::OffsetManager::KafkaManager.new({
-          connection: @connection,
-          group_name: group.name,
-          topic: group.topic
-        })
-      else
-        Poseidon::OffsetManager::ZookeeperManager.new({
-          zk: options[:zk],
-          group_name: group.name,
-          topic: group.topic
-        })
-      end
+      # sets the offset manager's connection
+      group.offset_manager(@connection)
 
       offset = load_offset
       offset = (trail ? :latest_offset : :earliest_offset) if offset == 0
@@ -62,11 +54,11 @@ class Poseidon::ConsumerGroup
     end
 
     def commit_offset
-      offset_manager.set(partition, offset)
+      group.offset_manager.set(partition, offset)
     end
 
     def load_offset
-      offset_manager.get(partition)
+      group.offset_manager.get(partition)
     end
 
   end
@@ -362,6 +354,21 @@ class Poseidon::ConsumerGroup
       # Sleep if either not claimes or nothing returned
       unless ok && mp
         sleep delay
+      end
+    end
+  end
+
+  def offset_manager(connection = nil)
+    @offset_manager ||= begin
+      # need a connection object
+      if connection.respond_to?(:fetch_consumer_offset)
+        Poseidon::OffsetManager::KafkaManager.new(connection: connection, 
+                                                  group_name: name,
+                                                  topic: topic)
+      else
+        Poseidon::OffsetManager::ZookeeperManager.new(zk: zk, 
+                                                      group_name: name,
+                                                      topic: topic)
       end
     end
   end

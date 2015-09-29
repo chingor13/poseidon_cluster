@@ -8,6 +8,8 @@ module Poseidon::OffsetManager
       @topic = options.fetch(:topic)
 
       res = conn.get_consumer_metadata(@group_name)
+      raise "Cannot read from offsets topic" unless res.error == 0
+
       @connection = Poseidon::Connection.new(
         res.coordinator_host,
         res.coordinator_port,

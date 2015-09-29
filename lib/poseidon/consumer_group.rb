@@ -36,29 +36,27 @@ class Poseidon::ConsumerGroup
     # @attr_reader [OffsetManager] offset_manager How we get/set partition offsets
     attr_reader :offset_manager
 
-    attr_reader :group
+    attr_reader :trailing
 
     # @api private
     def initialize(group, partition, options = {})
-      @group = group
       broker = group.leader(partition)
-      trail = options.delete(:trail)
-      super(group.id, broker.host, broker.port, group.topic, partition, 0, options)
+      @trailing = !!options.delete(:trail)
+      offset = (@trailing ? :latest_offset : :earliest_offset)
+      super(group.id, broker.host, broker.port, group.topic, partition, offset, options)
 
       # sets the offset manager's connection
-      group.offset_manager(@connection)
-
-      offset = load_offset
-      offset = (trail ? :latest_offset : :earliest_offset) if offset == 0
-      @offset = offset
+      @offset_manager = group.offset_manager(@connection)
     end
 
     def commit_offset
-      group.offset_manager.set(partition, offset)
+      return if @trailing
+      offset_manager.set(partition, offset)
     end
 
     def load_offset
-      group.offset_manager.get(partition)
+      return if @trailing
+      @offset = offset_manager.set(partition)
     end
 
   end

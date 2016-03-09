@@ -56,7 +56,7 @@ class Poseidon::ConsumerGroup
 
     def load_offset
       return if @trailing
-      @offset = offset_manager.set(partition)
+      @offset = offset_manager.get(partition)
     end
 
   end

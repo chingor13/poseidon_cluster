@@ -47,6 +47,7 @@ class Poseidon::ConsumerGroup
 
       # sets the offset manager's connection
       @offset_manager = group.offset_manager(@connection)
+      load_offset
     end
 
     def commit_offset
@@ -360,11 +361,11 @@ class Poseidon::ConsumerGroup
     @offset_manager ||= begin
       # need a connection object
       if connection.respond_to?(:fetch_consumer_offset)
-        Poseidon::OffsetManager::KafkaManager.new(connection: connection, 
+        Poseidon::OffsetManager::KafkaManager.new(connection: connection,
                                                   group_name: name,
                                                   topic: topic)
       else
-        Poseidon::OffsetManager::ZookeeperManager.new(zk: zk, 
+        Poseidon::OffsetManager::ZookeeperManager.new(zk: zk,
                                                       group_name: name,
                                                       topic: topic)
       end

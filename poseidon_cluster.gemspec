@@ -5,7 +5,7 @@ Gem::Specification.new do |s|
   s.name        = File.basename(__FILE__, '.gemspec')
   s.summary     = "Poseidon cluster extensions"
   s.description = "Cluster extensions for Poseidon, a producer and consumer implementation for Kafka >= 0.8"
-  s.version     = "0.3.2"
+  s.version     = "0.3.2.avvo3"
 
   s.authors     = ["Black Square Media"]
   s.email       = "info@blacksquaremedia.com"
@@ -15,7 +15,7 @@ Gem::Specification.new do |s|
   s.files        = `git ls-files`.split("\n")
   s.test_files   = `git ls-files -- {test,spec,features,scenario}/*`.split("\n")
 
-  s.add_dependency "poseidon", ">= 0.0.5", "<0.1.0"
+  s.add_dependency "poseidon", "0.0.5.4.avvo"
   s.add_dependency "zk"
 
   s.add_development_dependency "rake"

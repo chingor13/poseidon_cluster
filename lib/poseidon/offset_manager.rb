@@ -1,6 +1,7 @@
 module Poseidon::OffsetManager
 
   class KafkaManager
+    DEFAULT_CONNECTION_TIMEOUT = 10000
     attr_reader :connection, :group_name, :topic
     def initialize(options = {})
       conn = options.fetch(:connection)
@@ -14,8 +15,8 @@ module Poseidon::OffsetManager
         res.coordinator_host,
         res.coordinator_port,
         "#{@group_name}_#{@topic}",
-        200,
-        200
+        options.fetch(:socket_timeout_ms, DEFAULT_CONNECTION_TIMEOUT),
+        options.fetch(:connect_timeout_ms, DEFAULT_CONNECTION_TIMEOUT)
       )
     end
 
